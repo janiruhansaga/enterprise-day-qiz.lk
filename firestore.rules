@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Complete Zero-Trust Lockdown: Deny ALL direct client reads and writes.
+    // The browser client must NEVER access Firestore directly.
+    // All operations are executed exclusively through the server-authoritative backend via Firebase Admin SDK.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

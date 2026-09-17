@@ -1,0 +1,379 @@
+:root {
+  --font-display: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Color Palette */
+  --bg-primary: #070913;
+  --bg-secondary: #0f1426;
+  --bg-card: rgba(20, 26, 48, 0.75);
+  --bg-card-hover: rgba(29, 38, 70, 0.85);
+  --border-glass: rgba(255, 255, 255, 0.09);
+  --border-glass-glow: rgba(138, 43, 226, 0.4);
+
+  --text-primary: #ffffff;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+
+  /* Game Choice Colors & Accents */
+  --choice-red: #ff3366;
+  --choice-red-glow: rgba(255, 51, 102, 0.45);
+  --choice-blue: #0099ff;
+  --choice-blue-glow: rgba(0, 153, 255, 0.45);
+  --choice-yellow: #ffb800;
+  --choice-yellow-glow: rgba(255, 184, 0, 0.45);
+  --choice-green: #00d68f;
+  --choice-green-glow: rgba(0, 214, 143, 0.45);
+
+  --accent-purple: #7928ca;
+  --accent-cyan: #00dfd8;
+  --accent-gradient: linear-gradient(135deg, #7928ca 0%, #ff0080 50%, #00dfd8 100%);
+  --accent-neon: #00f2fe;
+
+  --shadow-card: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+  --radius-full: 9999px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+  background-image:
+    radial-gradient(at 0% 0%, rgba(121, 40, 202, 0.15) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(0, 223, 216, 0.12) 0px, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(255, 0, 128, 0.1) 0px, transparent 50%);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+button {
+  font-family: var(--font-display);
+  cursor: pointer;
+  border: none;
+  outline: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+input, textarea, select {
+  font-family: var(--font-body);
+  outline: none;
+  border: 1px solid var(--border-glass);
+  background: rgba(15, 20, 38, 0.7);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 15px rgba(0, 223, 216, 0.3);
+}
+
+/* Glass Card Utility */
+.glass-panel {
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+/* Vibrancy & Animations */
+@keyframes pulseGlow {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.04); opacity: 1; filter: drop-shadow(0 0 25px rgba(0, 223, 216, 0.6)); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes popIn {
+  0% { opacity: 0; transform: scale(0.8); }
+  70% { transform: scale(1.05); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes floatAnim {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.animate-pop {
+  animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.animate-slide {
+  animation: slideUp 0.35s ease-out forwards;
+}
+
+.floating-badge {
+  animation: floatAnim 3s ease-in-out infinite;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* ========================================================
+   RESPONSIVE CHESS COMPETITION DAY BACKGROUND
+   ======================================================== */
+
+.competition-chess-bg-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-image: url('/background image/pc.png');
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Subtle dark overlay to ensure maximum readability for cards, questions, and forms */
+.competition-chess-overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(7, 9, 19, 0.45) 0%, rgba(7, 9, 19, 0.72) 100%),
+    linear-gradient(to bottom, rgba(7, 9, 19, 0.3) 0%, rgba(7, 9, 19, 0.75) 100%);
+  pointer-events: none;
+}
+
+/* Responsive Mobile Breakpoint: Switch to Mobile.png */
+@media (max-width: 768px) {
+  .competition-chess-bg-layer {
+    background-image: url('/background image/Mobile.png');
+    background-position: center top;
+    background-attachment: scroll;
+  }
+}
+
+/* ========================================================
+   NAVBAR & RESPONSIVE HEADER
+   ======================================================== */
+.mindpulse-navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 28px;
+  border-bottom: 1px solid var(--border-glass);
+  background: rgba(7, 9, 19, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.navbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+  min-width: 0;
+}
+
+.navbar-logo-box {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  border-radius: 12px;
+  background: #070913;
+  border: 1.5px solid rgba(255, 215, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 16px rgba(255, 68, 0, 0.35), 0 0 8px rgba(255, 215, 0, 0.2);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.navbar-title {
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  background: linear-gradient(to right, #ffffff, #00dfd8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-family: var(--font-display);
+  line-height: 1.2;
+  display: block;
+}
+
+.navbar-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-cyan);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.navbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.navbar-sound-btn {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-glass);
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.navbar-portal-btn {
+  background: linear-gradient(135deg, rgba(121, 40, 202, 0.8), rgba(0, 223, 216, 0.8));
+  color: #fff;
+  padding: 9px 18px;
+  border-radius: var(--radius-md);
+  font-size: 0.88rem;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .mindpulse-navbar {
+    padding: 12px 18px;
+    gap: 12px;
+  }
+  .navbar-brand {
+    gap: 10px;
+  }
+  .navbar-logo-box {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    border-radius: 11px;
+  }
+  .navbar-title {
+    font-size: 1.25rem;
+  }
+  .navbar-subtitle {
+    font-size: 0.6rem;
+    letter-spacing: 0.05em;
+    white-space: normal;
+    flex-wrap: wrap;
+    line-height: 1.25;
+  }
+  .navbar-controls {
+    gap: 10px;
+  }
+  .navbar-sound-btn {
+    padding: 7px 10px;
+    font-size: 0.9rem;
+  }
+  .navbar-portal-btn {
+    padding: 8px 14px;
+    font-size: 0.82rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .mindpulse-navbar {
+    padding: 10px 14px;
+    gap: 8px;
+  }
+  .navbar-brand {
+    gap: 8px;
+    max-width: calc(100% - 150px);
+  }
+  .navbar-logo-box {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    border-radius: 9px;
+  }
+  .navbar-title {
+    font-size: 1.05rem;
+    line-height: 1.15;
+    white-space: nowrap;
+  }
+  .navbar-subtitle {
+    font-size: 0.52rem;
+    letter-spacing: 0.03em;
+    white-space: normal;
+    flex-wrap: wrap;
+    line-height: 1.2;
+  }
+  .navbar-controls {
+    gap: 8px;
+  }
+  .navbar-sound-btn {
+    padding: 6px 8px;
+    font-size: 0.82rem;
+    gap: 4px;
+  }
+  .navbar-portal-btn {
+    padding: 7px 11px;
+    font-size: 0.78rem;
+  }
+}
+
+/* Loader Chess Animations */
+@keyframes chessCellPulse {
+  0%, 100% { opacity: 0.2; transform: scale(0.95); }
+  50% { opacity: 1; transform: scale(1.05); filter: drop-shadow(0 0 10px rgba(0, 223, 216, 0.8)); }
+}
+
+@keyframes kingCrownBeacon {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 8px rgba(0, 223, 216, 0.5)); }
+  50% { transform: scale(1.1); filter: drop-shadow(0 0 20px rgba(0, 223, 216, 0.9)) drop-shadow(0 0 35px rgba(121, 40, 202, 0.7)); }
+}
+
+.chess-beacon {
+  animation: kingCrownBeacon 2s infinite ease-in-out;
+}
+
