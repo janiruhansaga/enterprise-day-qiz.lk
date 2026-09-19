@@ -5,6 +5,8 @@
   "main": "src/server.ts",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "test": "node --test --import tsx tests/**/*.test.ts",
     "migrate:firestore": "tsx src/scripts/migrateSqliteToFirestore.ts"
   },

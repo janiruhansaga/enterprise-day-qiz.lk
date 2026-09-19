@@ -79,6 +79,16 @@ export function buildApp(db: IDatastore = defaultDatabase): AppInstance {
       }
       return reply.sendFile('index.html');
     });
+  } else {
+    // Root status endpoint for standalone API deployment
+    app.get('/', async () => {
+      return {
+        name: 'MindPulse Arena Server API',
+        status: 'online',
+        timestamp: Date.now(),
+        version: '1.0.0'
+      };
+    });
   }
 
   // Health check endpoint

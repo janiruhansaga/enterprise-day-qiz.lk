@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { RegisterSchema, LoginSchema } from '../auth/schemas.js';
 import { hashPassword, verifyPassword, signAuthToken } from '../auth/crypto.js';
 import { securityConfig, UserRole } from '../config/security.js';
-import { IDatastore } from '../db/datastore.interface.js';
+import { IDatastore, UserRecord } from '../db/datastore.interface.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { registerRateLimiter, loginRateLimiter } from '../middleware/rateLimiter.js';
 import { defaultRevocationService } from '../auth/revocation.js';
@@ -241,19 +241,21 @@ export function createAuthRoutes(db: IDatastore): FastifyPluginAsync {
         user = (await db.findUserById(uid)) || teacherRecord;
       }
 
+      const activeUser: UserRecord = user;
+
       // Ensure custom claim is synced on Firebase user
       try {
         const auth = getFirebaseAuth();
-        await auth.setCustomUserClaims(uid, { role: user.role.toLowerCase() });
+        await auth.setCustomUserClaims(uid, { role: activeUser.role.toLowerCase() });
       } catch {
         // Non-fatal if claims assignment fails in unit tests or offline
       }
 
       const token = signAuthToken({
-        userId: user.id,
-        email: user.email,
-        role: user.role,
-        displayName: user.display_name
+        userId: activeUser.id,
+        email: activeUser.email,
+        role: activeUser.role,
+        displayName: activeUser.display_name
       });
 
       reply.setCookie(securityConfig.cookieName, token, {
@@ -268,10 +270,10 @@ export function createAuthRoutes(db: IDatastore): FastifyPluginAsync {
         statusCode: 200,
         message: 'Login successful',
         user: {
-          id: user.id,
-          email: user.email,
-          role: user.role,
-          displayName: user.display_name
+          id: activeUser.id,
+          email: activeUser.email,
+          role: activeUser.role,
+          displayName: activeUser.display_name
         },
         token: idToken
       });
