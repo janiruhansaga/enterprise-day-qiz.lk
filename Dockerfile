@@ -25,8 +25,9 @@ COPY server/package*.json ./server/
 WORKDIR /app/server
 RUN npm ci --omit=dev
 
-# Copy server application source
+# Copy server application source and compile production JavaScript bundle
 COPY server/ ./
+RUN npm run build
 
 # Copy built frontend assets from client-builder into /app/client/dist
 COPY --from=client-builder /app/client/dist /app/client/dist
@@ -38,5 +39,5 @@ USER node
 
 EXPOSE 4000
 
-CMD ["node", "--import", "tsx", "src/server.ts"]
+CMD ["node", "dist/src/server.js"]
 
