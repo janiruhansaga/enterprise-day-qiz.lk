@@ -10,5 +10,6 @@
     "outDir": "./dist",
     "rootDir": "./"
   },
-  "include": ["src/**/*", "tests/**/*", "api/**/*"]
+  "include": ["src/**/*", "api/**/*"],
+  "exclude": ["tests"]
 }
