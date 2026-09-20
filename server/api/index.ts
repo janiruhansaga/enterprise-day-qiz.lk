@@ -26,6 +26,13 @@ async function getApp(): Promise<AppInstance> {
 /**
  * Vercel Serverless Function entrypoint handler.
  * Proxies incoming HTTP requests directly into Fastify's native Node HTTP pipeline.
+ *
+ * ARCHITECTURAL NOTICE:
+ * Vercel Serverless Functions execute as ephemeral, stateless micro-invocations.
+ * They support standard REST endpoints (/api/v1/auth, /api/v1/quizzes, /api/v1/games, /health).
+ * They DO NOT support persistent duplex TCP sockets or WebSocket upgrades ('upgrade' event).
+ * Real-time Socket.IO multiplayer battle gameplay requires a persistent Node.js runtime
+ * (server.ts via Docker / Railway / Render / Fly.io / Google Cloud Run).
  */
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const app = await getApp();

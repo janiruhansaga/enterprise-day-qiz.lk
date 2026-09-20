@@ -1,4 +1,21 @@
-const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api/v1').replace(/\/+$/, '');
+const getApiBase = (): string => {
+  const envApiUrl = import.meta.env.VITE_API_URL;
+  if (envApiUrl && envApiUrl.trim()) {
+    return envApiUrl.trim().replace(/\/+$/, '');
+  }
+
+  // Strictly avoid localhost in production
+  if (import.meta.env.PROD) {
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      return `${window.location.origin}/api/v1`;
+    }
+    return '/api/v1';
+  }
+
+  return 'http://localhost:4000/api/v1';
+};
+
+const API_BASE = getApiBase();
 
 export interface User {
   id: string;

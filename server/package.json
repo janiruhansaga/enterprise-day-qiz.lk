@@ -4,6 +4,7 @@
   "description": "Production-quality secure real-time learning game platform server",
   "main": "src/server.ts",
   "scripts": {
+    "start": "node dist/src/server.js",
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
