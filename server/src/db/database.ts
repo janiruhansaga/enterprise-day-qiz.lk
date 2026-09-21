@@ -6,6 +6,35 @@ import { IDatastore, UserRecord, QuizRecord, QuizUpdatePayload, QuestionRecord, 
 
 export { UserRecord, QuizRecord, QuizUpdatePayload, QuestionRecord, OptionRecord, PublicQuestion, SecretAnswerKey, GameSessionRecord, SessionUpdatePayload, ParticipantRecord, GameResponseRecord };
 
+const USER_ROLE_VALUES: readonly string[] = [UserRole.STUDENT, UserRole.TEACHER, UserRole.ADMIN];
+
+function toUserRole(value: unknown): UserRole | null {
+  return typeof value === 'string' && USER_ROLE_VALUES.includes(value) ? (value as UserRole) : null;
+}
+
+function mapUserRow(row: Record<string, unknown> | undefined): UserRecord | null {
+  if (!row) return null;
+  const role = toUserRole(row.role);
+  if (
+    typeof row.id !== 'string' ||
+    typeof row.email !== 'string' ||
+    typeof row.password_hash !== 'string' ||
+    typeof row.display_name !== 'string' ||
+    typeof row.created_at !== 'number' ||
+    role === null
+  ) {
+    return null;
+  }
+  return {
+    id: row.id,
+    email: row.email,
+    password_hash: row.password_hash,
+    role,
+    display_name: row.display_name,
+    created_at: row.created_at
+  };
+}
+
 export class DatabaseService implements IDatastore {
   private db: DatabaseSync;
 
@@ -170,8 +199,7 @@ export class DatabaseService implements IDatastore {
       FROM users
       WHERE email = ?
     `);
-    const row = stmt.get(email) as UserRecord | undefined;
-    return row || null;
+    return mapUserRow(stmt.get(email) as Record<string, unknown> | undefined);
   }
 
   public findUserById(id: string): UserRecord | null {
@@ -180,8 +208,7 @@ export class DatabaseService implements IDatastore {
       FROM users
       WHERE id = ?
     `);
-    const row = stmt.get(id) as UserRecord | undefined;
-    return row || null;
+    return mapUserRow(stmt.get(id) as Record<string, unknown> | undefined);
   }
 
   // --- QUIZ & QUESTION REPOSITORY (WITH STRICT DATA SEGREGATION) ---
