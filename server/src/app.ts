@@ -3,7 +3,7 @@ import fastifyCookie from '@fastify/cookie';
 import fastifyCors from '@fastify/cors';
 import { Server as SocketIOServer } from 'socket.io';
 import { IDatastore } from './db/datastore.interface.js';
-import { defaultDatabase } from './db/database.js';
+import { getDefaultDatabase } from './db/database.js';
 import { createAuthRoutes } from './routes/auth.routes.js';
 import { createQuizRoutes } from './routes/quiz.routes.js';
 import { createGameRoutes } from './routes/game.routes.js';
@@ -20,13 +20,14 @@ export interface AppInstance extends FastifyInstance {
   db?: IDatastore;
 }
 
-export function buildApp(db: IDatastore = defaultDatabase, options?: { enableRealtime?: boolean }): AppInstance {
+export function buildApp(db?: IDatastore, options?: { enableRealtime?: boolean }): AppInstance {
+  const activeDb = db ?? getDefaultDatabase();
   const enableRealtime = options?.enableRealtime !== false;
   const app = Fastify({
     logger: false
   }) as AppInstance;
 
-  app.decorate('db', db);
+  app.decorate('db', activeDb);
 
   // Security Headers: CSP, X-Content-Type-Options, Strict-Transport-Security
   app.register(fastifyHelmet, {
@@ -98,9 +99,9 @@ export function buildApp(db: IDatastore = defaultDatabase, options?: { enableRea
   });
 
   // Register API routes
-  app.register(createAuthRoutes(db), { prefix: '/api/v1/auth' });
-  app.register(createQuizRoutes(db), { prefix: '/api/v1/quizzes' });
-  app.register(createGameRoutes(db), { prefix: '/api/v1/games' });
+  app.register(createAuthRoutes(activeDb), { prefix: '/api/v1/auth' });
+  app.register(createQuizRoutes(activeDb), { prefix: '/api/v1/quizzes' });
+  app.register(createGameRoutes(activeDb), { prefix: '/api/v1/games' });
 
   // Initialize Socket.io attached to the underlying HTTP server
   // (Disabled for Vercel serverless deployments where persistent sockets are unavailable)
@@ -113,7 +114,7 @@ export function buildApp(db: IDatastore = defaultDatabase, options?: { enableRea
       }
     });
 
-    const gameSocketManager = new GameSocketManager(io, db);
+    const gameSocketManager = new GameSocketManager(io, activeDb);
     app.io = io;
     app.gameSocketManager = gameSocketManager;
   }

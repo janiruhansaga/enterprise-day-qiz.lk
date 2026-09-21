@@ -1,5 +1,5 @@
 import { IDatastore } from './datastore.interface.js';
-import { DatabaseService, defaultDatabase } from './database.js';
+import { DatabaseService, getDefaultDatabase } from './database.js';
 import { FirestoreDatastore } from './firestoreDatastore.js';
 
 /**
@@ -14,5 +14,5 @@ export function createDatastore(type?: string): IDatastore {
     return new FirestoreDatastore();
   }
 
-  return defaultDatabase;
+  return getDefaultDatabase();
 }

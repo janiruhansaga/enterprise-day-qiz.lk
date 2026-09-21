@@ -579,7 +579,17 @@ export class DatabaseService implements IDatastore {
   }
 }
 
-// Singleton database instance
-export const defaultDatabase = new DatabaseService(
-  process.env.DB_PATH || path.resolve(process.cwd(), 'data', 'enterprise_quiz.sqlite')
-);
+let defaultDatabaseInstance: DatabaseService | null = null;
+
+// Lazy singleton: SQLite file must NOT be opened at module load.
+// On serverless (Vercel) the filesystem is read-only, so constructing
+// the SQLite datastore eagerly at import time crashes the function even
+// when Firestore is the active datastore.
+export function getDefaultDatabase(): DatabaseService {
+  if (!defaultDatabaseInstance) {
+    defaultDatabaseInstance = new DatabaseService(
+      process.env.DB_PATH || path.resolve(process.cwd(), 'data', 'enterprise_quiz.sqlite')
+    );
+  }
+  return defaultDatabaseInstance;
+}
