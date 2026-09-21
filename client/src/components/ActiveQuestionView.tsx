@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { soundManager } from '../utils/soundManager';
 
 export interface QuestionPayload {
@@ -18,6 +18,7 @@ interface ActiveQuestionViewProps {
   totalAnswers: number;
   totalParticipants: number;
   onSubmitAnswer?: (selectedOptionId: string) => void;
+  onTimeExpired?: () => void;
 }
 
 export const ActiveQuestionView: React.FC<ActiveQuestionViewProps> = ({
@@ -25,15 +26,18 @@ export const ActiveQuestionView: React.FC<ActiveQuestionViewProps> = ({
   isTeacher,
   totalAnswers,
   totalParticipants,
-  onSubmitAnswer
+  onSubmitAnswer,
+  onTimeExpired
 }) => {
   const duration = question.durationSec || (question as any).timeLimitSec || 20;
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState(duration);
+  const expiredRef = useRef<boolean>(false);
 
   // Synchronized countdown timer based on serverStartTime
   useEffect(() => {
     setSelectedOptionId(null);
+    expiredRef.current = false;
 
     const updateTimer = () => {
       const elapsedSec = (Date.now() - question.serverStartTime) / 1000;
@@ -50,6 +54,14 @@ export const ActiveQuestionView: React.FC<ActiveQuestionViewProps> = ({
     const interval = setInterval(updateTimer, 200);
     return () => clearInterval(interval);
   }, [question.questionId, question.serverStartTime, duration]);
+
+  // Teacher-driven round close: when the countdown ends, ask the server to close the round
+  useEffect(() => {
+    if (isTeacher && onTimeExpired && timeLeft <= 0 && !expiredRef.current) {
+      expiredRef.current = true;
+      onTimeExpired();
+    }
+  }, [timeLeft, isTeacher, onTimeExpired]);
 
   const handleSelectOption = (optId: string) => {
     if (isTeacher || selectedOptionId || timeLeft <= 0) return;

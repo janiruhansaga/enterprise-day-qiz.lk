@@ -193,6 +193,108 @@ export const api = {
     const res = await fetch(`${API_BASE}/games/pin/${pin}`);
     const json = await res.json();
     if (!res.ok) throw new Error(json.message || 'Game not found');
-    return json.game;
+    return json;
+  },
+
+  async joinGame(pin: string, nickname: string) {
+    const res = await fetch(`${API_BASE}/games/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin, nickname })
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to join game');
+    return json;
+  },
+
+  async submitAnswer(
+    token: string,
+    data: { sessionId: string; questionId: string; selectedOptionId: string; roundNonce: string }
+  ) {
+    const res = await fetch(`${API_BASE}/games/answers`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(data)
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      const err = new Error(json.message || 'Answer rejected') as any;
+      err.code = json.code;
+      throw err;
+    }
+    return json;
+  },
+
+  async startGame(token: string, sessionId: string) {
+    const res = await fetch(`${API_BASE}/games/${sessionId}/start`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to start game');
+    return json;
+  },
+
+  async nextQuestion(token: string, sessionId: string) {
+    const res = await fetch(`${API_BASE}/games/${sessionId}/next`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to advance question');
+    return json;
+  },
+
+  async finishRound(token: string, sessionId: string) {
+    const res = await fetch(`${API_BASE}/games/${sessionId}/finish-round`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to finish round');
+    return json;
+  },
+
+  async showLeaderboard(token: string, sessionId: string) {
+    const res = await fetch(`${API_BASE}/games/${sessionId}/leaderboard`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to show leaderboard');
+    return json;
+  },
+
+  async kickParticipant(token: string, sessionId: string, participantId: string) {
+    const res = await fetch(`${API_BASE}/games/${sessionId}/kick`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ sessionId, participantId })
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to kick participant');
+    return json;
+  },
+
+  async getPodium(token: string, sessionId: string) {
+    const res = await fetch(`${API_BASE}/games/${sessionId}/podium`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to load results');
+    return json;
+  },
+
+  async getGameState(sessionId: string) {
+    const res = await fetch(`${API_BASE}/games/${sessionId}/state`);
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to load game state');
+    return json.state;
   }
 };

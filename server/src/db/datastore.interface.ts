@@ -105,6 +105,40 @@ export interface GameResponseRecord {
   submitted_at: number;
 }
 
+export interface PublicLeaderboardEntry {
+  rank: number;
+  nickname: string;
+  score: number;
+  streak: number;
+}
+
+export interface PublicPodium {
+  topThree: PublicLeaderboardEntry[];
+  totalParticipants: number;
+}
+
+export interface SessionPublicState {
+  sessionId: string;
+  status: string;
+  quizTitle?: string;
+  currentQuestionIndex?: number | null;
+  totalQuestions?: number;
+  currentQuestionId?: string | null;
+  prompt?: string | null;
+  timeLimitSec?: number | null;
+  basePoints?: number | null;
+  serverStartTime?: number | null;
+  serverDeadline?: number | null;
+  roundNonce?: string | null;
+  options?: Array<{ id: string; option_text: string; order_index: number }>;
+  answersCount?: number;
+  totalParticipants?: number;
+  revealedCorrectOptionId?: string | null;
+  leaderboard?: PublicLeaderboardEntry[] | null;
+  podium?: PublicPodium | null;
+  updatedAt?: number;
+}
+
 /**
  * Universal Datastore Interface
  * Implemented by:
@@ -143,6 +177,9 @@ export interface IDatastore {
   recordAnswerAtomic(response: GameResponseRecord): MaybePromise<void>;
   hasParticipantAnswered(sessionId: string, participantId: string, questionId: string): MaybePromise<boolean>;
   countQuestionResponses?(sessionId: string, questionId: string): MaybePromise<number>;
+
+  publishSessionPublicState?(sessionId: string, state: SessionPublicState): MaybePromise<void>;
+  markParticipantKicked?(sessionId: string, participantId: string): MaybePromise<void>;
 
   close?(): MaybePromise<void>;
 }

@@ -12,7 +12,12 @@ import { ChessAtmosphere } from './components/ChessAtmosphere';
 import { ChessLoader } from './components/ChessLoader';
 import { Footer } from './components/Footer';
 import { api, type User } from './services/api';
-import { socketService } from './services/socket';
+import {
+  subscribeToSessionState,
+  subscribeToKicked,
+  subscribeToParticipants,
+  type PublicSessionState
+} from './services/gameRealtime';
 import { soundManager } from './utils/soundManager';
 import { firebaseAuthService } from './services/firebaseAuth';
 
@@ -24,6 +29,36 @@ type AppView =
   | 'ROUND_RESULT'
   | 'LEADERBOARD'
   | 'PODIUM';
+
+interface PlayerSession {
+  token: string;
+  participantId: string;
+  sessionId: string;
+  pin: string;
+  nickname: string;
+}
+
+const PLAYER_SESSION_KEY = 'mindpulse_player_session';
+
+function savePlayerSession(data: PlayerSession) {
+  sessionStorage.setItem(PLAYER_SESSION_KEY, JSON.stringify(data));
+}
+
+function clearPlayerSession() {
+  sessionStorage.removeItem(PLAYER_SESSION_KEY);
+}
+
+function loadPlayerSession(): PlayerSession | null {
+  try {
+    const raw = sessionStorage.getItem(PLAYER_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PlayerSession;
+    if (parsed && parsed.token && parsed.participantId && parsed.sessionId) return parsed;
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 export const App: React.FC = () => {
   // Auth state
@@ -38,11 +73,13 @@ export const App: React.FC = () => {
   const [gamePin, setGamePin] = useState<string>('');
   const [nickname, setNickname] = useState<string>('');
   const [participantId, setParticipantId] = useState<string>('');
+  const [participantToken, setParticipantToken] = useState<string>('');
   const [participants, setParticipants] = useState<{ id: string; nickname: string }[]>([]);
 
   // Active Game state
   const [currentQuestion, setCurrentQuestion] = useState<QuestionPayload | null>(null);
   const [totalAnswers, setTotalAnswers] = useState<number>(0);
+  const [totalParticipants, setTotalParticipants] = useState<number>(0);
   const [correctOptionId, setCorrectOptionId] = useState<string>('');
   const [studentResult, setStudentResult] = useState<{
     correct: boolean;
@@ -63,12 +100,14 @@ export const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const socketRef = useRef(socketService.connect());
-  const sessionRef = useRef({ sessionId, participantId, isTeacher, token });
-
-  useEffect(() => {
-    sessionRef.current = { sessionId, participantId, isTeacher, token };
-  }, [sessionId, participantId, isTeacher, token]);
+  const lastAnswerRef = useRef<{
+    roundNonce: string;
+    correct: boolean;
+    pointsAwarded: number;
+    totalScore: number;
+    streak: number;
+  } | null>(null);
+  const finishRoundInFlightRef = useRef<boolean>(false);
 
   // Load teacher user if token exists
   useEffect(() => {
@@ -111,137 +150,162 @@ export const App: React.FC = () => {
     return () => unsubscribe();
   }, [token]);
 
-  // Setup Socket event handlers
+  // Restore an in-progress student session after a page refresh
   useEffect(() => {
-    const socket = socketRef.current;
+    const saved = loadPlayerSession();
+    if (!saved) return;
 
-    // 0. Socket Connection / Reconnection handling
-    socket.on('connect', () => {
-      const { sessionId: currentSessionId, participantId: currentPartId, isTeacher: currentIsTeacher, token: currentToken } = sessionRef.current;
-      if (currentSessionId) {
-        if (currentIsTeacher && currentToken) {
-          socket.emit('game:teacher_join', { sessionId: currentSessionId, token: currentToken });
-        } else if (currentPartId) {
-          socket.emit('game:reconnect', { sessionId: currentSessionId, participantId: currentPartId });
+    setSessionId(saved.sessionId);
+    setGamePin(saved.pin);
+    setNickname(saved.nickname);
+    setParticipantId(saved.participantId);
+    setParticipantToken(saved.token);
+    setIsTeacher(false);
+    setView('STUDENT_LOBBY');
+  }, []);
+
+  // Subscribe to the server-published public state document (drives all screen transitions)
+  useEffect(() => {
+    if (!sessionId) return;
+
+    let polling: number | undefined;
+
+    const applyState = (state: PublicSessionState) => {
+      if (!state || !state.status) return;
+
+      switch (state.status) {
+        case 'LOBBY':
+          setView(isTeacher ? 'TEACHER_LOBBY' : 'STUDENT_LOBBY');
+          break;
+
+        case 'QUESTION_ACTIVE': {
+          soundManager.playTick();
+          const normalizedQuestion: QuestionPayload = {
+            questionId: state.currentQuestionId || '',
+            questionIndex: state.currentQuestionIndex ?? 0,
+            totalQuestions: state.totalQuestions ?? 1,
+            prompt: state.prompt || '',
+            durationSec: state.timeLimitSec ?? 20,
+            serverStartTime: state.serverStartTime || Date.now(),
+            roundNonce: state.roundNonce || '',
+            options: (state.options || []).map((opt) => ({
+              id: opt.id,
+              optionText: opt.optionText || opt.option_text || ''
+            }))
+          };
+          lastAnswerRef.current = null;
+          setCurrentQuestion(normalizedQuestion);
+          setTotalAnswers(state.answersCount ?? 0);
+          setTotalParticipants(state.totalParticipants ?? 0);
+          setCorrectOptionId('');
+          setStudentResult(null);
+          setView('QUESTION');
+          break;
         }
+
+        case 'QUESTION_RESULTS':
+          setCorrectOptionId(state.revealedCorrectOptionId || '');
+          if (
+            lastAnswerRef.current &&
+            state.roundNonce &&
+            lastAnswerRef.current.roundNonce === state.roundNonce
+          ) {
+            setStudentResult({
+              correct: lastAnswerRef.current.correct,
+              pointsAwarded: lastAnswerRef.current.pointsAwarded,
+              totalScore: lastAnswerRef.current.totalScore,
+              streak: lastAnswerRef.current.streak
+            });
+          } else {
+            setStudentResult(null);
+          }
+          setView('ROUND_RESULT');
+          break;
+
+        case 'LEADERBOARD':
+          setLeaderboard(
+            (state.leaderboard || []).map((entry) => ({
+              rank: entry.rank,
+              nickname: entry.nickname,
+              score: entry.score,
+              streak: entry.streak
+            }))
+          );
+          setView('LEADERBOARD');
+          break;
+
+        case 'FINISHED':
+          setTopThree(
+            (state.podium?.topThree || []).map((entry) => ({
+              rank: entry.rank,
+              nickname: entry.nickname,
+              score: entry.score,
+              streak: entry.streak
+            }))
+          );
+          setView('PODIUM');
+          if (participantToken && !isTeacher) {
+            api
+              .getPodium(participantToken, sessionId)
+              .then((res) => {
+                if (res && res.personalResult) {
+                  setPersonalFinalResult({
+                    rank: res.personalResult.rank,
+                    totalScore: res.personalResult.totalScore,
+                    streak: res.personalResult.streak,
+                    totalParticipants: res.podium?.totalParticipants || totalParticipants
+                  });
+                }
+              })
+              .catch(() => {});
+          }
+          break;
+
+        default:
+          break;
       }
-    });
+    };
 
-    // 1. Participant joined lobby event
-    socket.on('game:participant_joined', (data: { participantId: string; nickname: string }) => {
-      soundManager.playJoinChime();
-      setParticipants((prev) => {
-        if (prev.some((p) => p.id === data.participantId)) return prev;
-        return [...prev, { id: data.participantId, nickname: data.nickname }];
-      });
-    });
+    const stop = subscribeToSessionState(
+      sessionId,
+      applyState,
+      () => {
+        // Firestore unavailable or rules not yet deployed: poll the sanitized REST state as fallback
+        polling = window.setInterval(() => {
+          api
+            .getGameState(sessionId)
+            .then((state) => applyState(state))
+            .catch(() => {});
+        }, 1500);
+      }
+    );
 
-    // 2. Participant left lobby
-    socket.on('game:participant_left', (data: { participantId: string }) => {
-      setParticipants((prev) => prev.filter((p) => p.id !== data.participantId));
-    });
+    return () => {
+      if (polling) window.clearInterval(polling);
+      stop();
+    };
+  }, [sessionId, isTeacher, participantToken, totalParticipants]);
 
-    // 3. Student kicked by teacher
-    socket.on('game:kicked', () => {
+  // Teacher roster: subscribe to the participants subcollection (host-only via Firestore rules)
+  useEffect(() => {
+    if (!sessionId || !isTeacher) return;
+    const stop = subscribeToParticipants(sessionId, (list) => {
+      setParticipants(list.map((p) => ({ id: p.id, nickname: p.nickname })));
+    });
+    return stop;
+  }, [sessionId, isTeacher]);
+
+  // Student kicked marker: subscribe to own kicked document
+  useEffect(() => {
+    if (!sessionId || !participantId || isTeacher) return;
+    const stop = subscribeToKicked(sessionId, participantId, () => {
       soundManager.playWrongBuzzer();
       setView('LANDING');
       setErrorMessage('You have been removed from the session by the host.');
+      clearPlayerSession();
     });
-
-    // 4. Question Started (Sanitized authoritatively)
-    socket.on('game:question_started', (q: any) => {
-      soundManager.playTick();
-      const normalizedQuestion: QuestionPayload = {
-        questionId: q.questionId,
-        questionIndex: q.questionIndex,
-        totalQuestions: q.totalQuestions,
-        prompt: q.prompt || q.questionText || '',
-        durationSec: q.durationSec ?? q.timeLimitSec ?? 20,
-        serverStartTime: q.serverStartTime || Date.now(),
-        roundNonce: q.roundNonce || '',
-        options: (q.options || []).map((opt: any) => ({
-          id: opt.id,
-          optionText: opt.optionText || opt.option_text || ''
-        }))
-      };
-      setCurrentQuestion(normalizedQuestion);
-      setTotalAnswers(0);
-      setCorrectOptionId('');
-      setStudentResult(null);
-      setView('QUESTION');
-    });
-
-    // 5. Live Answers counter update
-    socket.on('game:answer_count_updated', (data: { totalAnswers: number }) => {
-      setTotalAnswers(data.totalAnswers);
-    });
-
-    // 6. Answer Acknowledged (Student private feedback)
-    socket.on('game:answer_acknowledged', () => {
-      // Confirmed receipt on authoritative server
-    });
-
-    // 7. Question Ended (Answer Reveal)
-    socket.on('game:question_ended', (data: {
-      correctOptionId: string;
-      correctOptionText?: string;
-      studentFeedback?: {
-        isCorrect: boolean;
-        pointsAwarded: number;
-        totalScore: number;
-        streak: number;
-      };
-    }) => {
-      setCorrectOptionId(data.correctOptionId);
-      if (data.studentFeedback) {
-        setStudentResult({
-          correct: data.studentFeedback.isCorrect,
-          pointsAwarded: data.studentFeedback.pointsAwarded,
-          totalScore: data.studentFeedback.totalScore,
-          streak: data.studentFeedback.streak
-        });
-      }
-      setView('ROUND_RESULT');
-    });
-
-    // 8. Leaderboard Update
-    socket.on('game:leaderboard_update', (data: { leaderboard: LeaderboardEntry[] }) => {
-      setLeaderboard(data.leaderboard);
-      setView('LEADERBOARD');
-    });
-
-    // 9. Final Podium
-    socket.on('game:final_podium', (podium: { topThree: LeaderboardEntry[]; totalParticipants: number }) => {
-      setTopThree(podium.topThree);
-      setView('PODIUM');
-    });
-
-    // 10. Private Personal Result
-    socket.on('game:final_personal_result', (res: any) => {
-      setPersonalFinalResult(res);
-    });
-
-    // Socket Errors
-    socket.on('game:error', (err: { message: string; code: string }) => {
-      soundManager.playWrongBuzzer();
-      setErrorMessage(err.message || 'Game operation error');
-    });
-
-    return () => {
-      socket.off('connect');
-      socket.off('game:participant_joined');
-      socket.off('game:participant_left');
-      socket.off('game:kicked');
-      socket.off('game:question_started');
-      socket.off('game:answer_count_updated');
-      socket.off('game:answer_acknowledged');
-      socket.off('game:question_ended');
-      socket.off('game:leaderboard_update');
-      socket.off('game:final_podium');
-      socket.off('game:final_personal_result');
-      socket.off('game:error');
-    };
-  }, []);
+    return stop;
+  }, [sessionId, participantId, isTeacher]);
 
   // --- Student Actions ---
   const handleJoinGame = async (pin: string, nick: string) => {
@@ -249,43 +313,52 @@ export const App: React.FC = () => {
     setErrorMessage(null);
 
     try {
-      await api.lookupPin(pin);
-      const socket = socketRef.current;
-
-      socket.emit('game:join', { pin, nickname: nick }, (res: any) => {
-        setIsLoading(false);
-        if (res && res.success) {
-          soundManager.playJoinChime();
-          setGamePin(pin);
-          setNickname(nick);
-          setSessionId(res.sessionId);
-          if (res.participantId) {
-            setParticipantId(res.participantId);
-          }
-          setIsTeacher(false);
-          setView('STUDENT_LOBBY');
-        } else {
-          soundManager.playWrongBuzzer();
-          setErrorMessage(res?.message || 'Failed to join game');
-        }
+      const res = await api.joinGame(pin, nick);
+      soundManager.playJoinChime();
+      setGamePin(pin);
+      setNickname(nick);
+      setSessionId(res.sessionId);
+      setParticipantId(res.participantId);
+      setParticipantToken(res.token);
+      setIsTeacher(false);
+      setParticipants([]);
+      savePlayerSession({
+        token: res.token,
+        participantId: res.participantId,
+        sessionId: res.sessionId,
+        pin,
+        nickname: nick
       });
+      setView('STUDENT_LOBBY');
     } catch (err: any) {
-      setIsLoading(false);
       soundManager.playWrongBuzzer();
-      setErrorMessage(err.message || 'Game not found');
+      setErrorMessage(err.message || 'Failed to join game');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleSubmitAnswer = (selectedOptionId: string) => {
-    if (!currentQuestion) return;
-    const socket = socketRef.current;
+  const handleSubmitAnswer = async (selectedOptionId: string) => {
+    if (!currentQuestion || !participantToken) return;
 
-    socket.emit('game:submit_answer', {
-      sessionId,
-      questionId: currentQuestion.questionId,
-      selectedOptionId,
-      roundNonce: currentQuestion.roundNonce
-    });
+    try {
+      const res = await api.submitAnswer(participantToken, {
+        sessionId,
+        questionId: currentQuestion.questionId,
+        selectedOptionId,
+        roundNonce: currentQuestion.roundNonce
+      });
+      lastAnswerRef.current = {
+        roundNonce: currentQuestion.roundNonce,
+        correct: !!res.isCorrect,
+        pointsAwarded: res.pointsAwarded ?? 0,
+        totalScore: res.totalScore ?? 0,
+        streak: res.streakCount ?? 0
+      };
+    } catch (err: any) {
+      soundManager.playWrongBuzzer();
+      setErrorMessage(err.message || 'Failed to submit answer');
+    }
   };
 
   // --- Teacher Actions ---
@@ -313,53 +386,83 @@ export const App: React.FC = () => {
 
     try {
       const session = await api.hostGameSession(token, quizId);
-      const socket = socketRef.current;
-
-      socket.emit('game:teacher_join', { sessionId: session.id, token }, (res: any) => {
-        setIsLoading(false);
-        if (res && res.success) {
-          setSessionId(session.id);
-          setGamePin(session.pin);
-          setIsTeacher(true);
-          setParticipants([]);
-          setShowTeacherModal(false);
-          setView('TEACHER_LOBBY');
-        } else {
-          setErrorMessage(res?.message || 'Failed to initialize session');
-        }
-      });
+      setSessionId(session.id);
+      setGamePin(session.pin);
+      setIsTeacher(true);
+      setParticipants([]);
+      setShowTeacherModal(false);
+      setView('TEACHER_LOBBY');
     } catch (err: any) {
-      setIsLoading(false);
       setErrorMessage(err.message || 'Failed to host game');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleStartGame = () => {
+  const handleStartGame = async () => {
+    if (!token || !sessionId) return;
     soundManager.playTick();
-    const socket = socketRef.current;
-    socket.emit('game:start_game', { sessionId, token }, (res: any) => {
-      if (res && !res.success) {
-        soundManager.playWrongBuzzer();
-        setErrorMessage(res.message || 'Failed to start game');
+    try {
+      await api.startGame(token, sessionId);
+    } catch (err: any) {
+      soundManager.playWrongBuzzer();
+      setErrorMessage(err.message || 'Failed to start game');
+    }
+  };
+
+  const handleFinishRound = async () => {
+    if (!token || !sessionId || finishRoundInFlightRef.current) return;
+    finishRoundInFlightRef.current = true;
+    try {
+      for (let attempt = 0; attempt < 6; attempt++) {
+        try {
+          await api.finishRound(token, sessionId);
+          return;
+        } catch (err: any) {
+          const isTooEarly = err?.message && /still in progress/i.test(err.message);
+          if (isTooEarly && attempt < 5) {
+            await new Promise((resolve) => setTimeout(resolve, 1200));
+            continue;
+          }
+          soundManager.playWrongBuzzer();
+          setErrorMessage(err.message || 'Failed to finish round');
+          return;
+        }
       }
-    });
+    } finally {
+      finishRoundInFlightRef.current = false;
+    }
   };
 
-  const handleNextQuestion = () => {
+  const handleNextQuestion = async () => {
+    if (!token || !sessionId) return;
     soundManager.playTick();
-    const socket = socketRef.current;
-    socket.emit('game:next_question', { sessionId });
+    try {
+      await api.nextQuestion(token, sessionId);
+    } catch (err: any) {
+      soundManager.playWrongBuzzer();
+      setErrorMessage(err.message || 'Failed to advance question');
+    }
   };
 
-  const handleShowLeaderboard = () => {
+  const handleShowLeaderboard = async () => {
+    if (!token || !sessionId) return;
     soundManager.playTick();
-    const socket = socketRef.current;
-    socket.emit('game:show_leaderboard', { sessionId });
+    try {
+      await api.showLeaderboard(token, sessionId);
+    } catch (err: any) {
+      soundManager.playWrongBuzzer();
+      setErrorMessage(err.message || 'Failed to show leaderboard');
+    }
   };
 
-  const handleKickParticipant = (participantId: string) => {
-    const socket = socketRef.current;
-    socket.emit('game:kick_participant', { sessionId, participantId });
+  const handleKickParticipant = async (kickedId: string) => {
+    if (!token || !sessionId) return;
+    try {
+      await api.kickParticipant(token, sessionId, kickedId);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to kick participant');
+    }
   };
 
   const handleReturnHome = () => {
@@ -369,10 +472,12 @@ export const App: React.FC = () => {
     setGamePin('');
     setNickname('');
     setParticipantId('');
+    setParticipantToken('');
     setCurrentQuestion(null);
     setStudentResult(null);
     setPersonalFinalResult(null);
     setParticipants([]);
+    clearPlayerSession();
   };
 
   return (
@@ -417,8 +522,9 @@ export const App: React.FC = () => {
             question={currentQuestion}
             isTeacher={isTeacher}
             totalAnswers={totalAnswers}
-            totalParticipants={isTeacher ? participants.length : totalAnswers}
+            totalParticipants={isTeacher ? participants.length : totalParticipants}
             onSubmitAnswer={handleSubmitAnswer}
+            onTimeExpired={isTeacher ? handleFinishRound : undefined}
           />
         )}
 

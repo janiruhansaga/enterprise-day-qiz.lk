@@ -12,7 +12,8 @@ import {
   GameSessionRecord,
   SessionUpdatePayload,
   ParticipantRecord,
-  GameResponseRecord
+  GameResponseRecord,
+  SessionPublicState
 } from './datastore.interface.js';
 
 export class FirestoreDatastore implements IDatastore {
@@ -475,6 +476,18 @@ export class FirestoreDatastore implements IDatastore {
       .count()
       .get();
     return snap.data().count;
+  }
+
+  public async publishSessionPublicState(sessionId: string, state: SessionPublicState): Promise<void> {
+    await this.db.collection('game_sessions').doc(sessionId).collection('state').doc('public').set(state);
+  }
+
+  public async markParticipantKicked(sessionId: string, participantId: string): Promise<void> {
+    const data = {
+      participantId,
+      kickedAt: Date.now()
+    };
+    await this.db.collection('game_sessions').doc(sessionId).collection('kicked').doc(participantId).set(data);
   }
 
   public async close(): Promise<void> {

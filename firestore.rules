@@ -1,11 +1,48 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Complete Zero-Trust Lockdown: Deny ALL direct client reads and writes.
-    // The browser client must NEVER access Firestore directly.
-    // All operations are executed exclusively through the server-authoritative backend via Firebase Admin SDK.
+    // =========================================================================
+    // ZERO-TRUST DEFAULTS
+    // Deny ALL direct client reads/writes unless explicitly granted below.
+    // Nothing is written by the client at all: every write happens server-side
+    // via the Firebase Admin SDK (authoritative backend).
+    // =========================================================================
     match /{document=**} {
       allow read, write: if false;
+    }
+
+    // =========================================================================
+    // PUBLIC REALTIME STATE (students subscribe unauthenticated)
+    // Server-published, sanitized game state. Contains NO correct answers while
+    // a question is active, NO participant roster, and NO teacher data.
+    // =========================================================================
+    match /game_sessions/{sessionId}/state/public {
+      allow read: if true;
+    }
+
+    // =========================================================================
+    // KICKED MARKER (student subscribes to only their own UUID-marked doc)
+    // participantId is a server-generated unpredictable UUID. The marker contains
+    // no PII beyond an already-known participantId.
+    // =========================================================================
+    match /game_sessions/{sessionId}/kicked/{participantId} {
+      allow read: if true;
+    }
+
+    // =========================================================================
+    // PARTICIPANT ROSTER (teacher host only)
+    // Readable exclusively by the authenticated session host (teacher/admin)
+    // via custom claim role. Query atomicity is enforced by restricting to the
+    // host's own session through the session doc's host_teacher_id.
+    // =========================================================================
+    match /game_sessions/{sessionId}/participants/{participantId} {
+      allow read: if isHostTeacher(sessionId);
+    }
+
+    function isHostTeacher(sessionId) {
+      return request.auth != null
+        && (request.auth.token.role == 'teacher' || request.auth.token.role == 'admin')
+        && get(/databases/$(database)/documents/game_sessions/$(sessionId)).data.host_teacher_id == request.auth.uid;
     }
   }
 }

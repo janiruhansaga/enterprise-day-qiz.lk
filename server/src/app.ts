@@ -20,7 +20,8 @@ export interface AppInstance extends FastifyInstance {
   db?: IDatastore;
 }
 
-export function buildApp(db: IDatastore = defaultDatabase): AppInstance {
+export function buildApp(db: IDatastore = defaultDatabase, options?: { enableRealtime?: boolean }): AppInstance {
+  const enableRealtime = options?.enableRealtime !== false;
   const app = Fastify({
     logger: false
   }) as AppInstance;
@@ -102,17 +103,20 @@ export function buildApp(db: IDatastore = defaultDatabase): AppInstance {
   app.register(createGameRoutes(db), { prefix: '/api/v1/games' });
 
   // Initialize Socket.io attached to the underlying HTTP server
-  const io = new SocketIOServer(app.server, {
-    cors: {
-      origin: '*',
-      methods: ['GET', 'POST'],
-      credentials: true
-    }
-  });
+  // (Disabled for Vercel serverless deployments where persistent sockets are unavailable)
+  if (enableRealtime) {
+    const io = new SocketIOServer(app.server, {
+      cors: {
+        origin: '*',
+        methods: ['GET', 'POST'],
+        credentials: true
+      }
+    });
 
-  const gameSocketManager = new GameSocketManager(io, db);
-  app.io = io;
-  app.gameSocketManager = gameSocketManager;
+    const gameSocketManager = new GameSocketManager(io, db);
+    app.io = io;
+    app.gameSocketManager = gameSocketManager;
+  }
 
   return app;
 }
